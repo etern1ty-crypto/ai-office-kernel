@@ -1,0 +1,6 @@
+python-telegram-bot>=20,<22
+pexpect>=4.9
+faster-whisper
+edge-tts
+
+

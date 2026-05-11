@@ -1,0 +1,26 @@
+.env
+.env.*
+!.env.example
+
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+.ai-office/
+.agents/
+.codex/
+
+# Projects and personal data
+etern1ty-portfolio/
+prompts/personal/
+
+node_modules/
+dist/
+build/
+coverage/
+
+*.log

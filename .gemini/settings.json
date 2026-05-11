@@ -1,0 +1,24 @@
+{
+  "experimental": {
+    "enableAgents": false,
+    "adk": {
+      "agentSessionNoninteractiveEnabled": false,
+      "agentSessionInteractiveEnabled": false
+    }
+  },
+  "tools": {
+    "core": [
+      "glob",
+      "grep_search",
+      "list_directory",
+      "read_file",
+      "read_many_files",
+      "write_file",
+      "replace",
+      "run_shell_command",
+      "ask_user",
+      "invoke_agent"
+    ],
+    "exclude": []
+  }
+}
