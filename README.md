@@ -1,4 +1,4 @@
-<img src="https://capsule-render.vercel.app/api?type=waving&color=0:1a1b27,50:9B59B6,100:1a1b27&height=200&section=header&text=AI-Office%20Kernel&fontSize=45&fontColor=FFFFFF&fontAlignY=35&desc=Telegram-Driven%20Multi-Agent%20AI%20Office&descSize=16&descColor=E8D5F5&descAlignY=55&animation=fadeIn" width="100%"/>
+<img src="https://capsule-render.vercel.app/api?type=waving&color=0:1a1b27,50:9B59B6,100:1a1b27&height=200&section=header&text=AI-Office%20Kernel&fontSize=45&fontColor=FFFFFF&fontAlignY=35&desc=Telegram-Driven%20Multi-Agent%20AI%20Office%20Framework&descSize=16&descColor=E8D5F5&descAlignY=55&animation=fadeIn" width="100%"/>
 
 <div align="center">
 
