@@ -1,291 +1,196 @@
-# AI-Office Kernel
+<img src="https://capsule-render.vercel.app/api?type=waving&color=0:1a1b27,50:9B59B6,100:1a1b27&height=200&section=header&text=AI-Office%20Kernel&fontSize=45&fontColor=FFFFFF&fontAlignY=35&desc=Telegram-Driven%20Multi-Agent%20AI%20Office&descSize=16&descColor=E8D5F5&descAlignY=55&animation=fadeIn" width="100%"/>
 
-MVP-каркас для проекта "Виртуальный ИИ-Офис": один Telegram-бот принимает сообщения, локальный секретарь на Ollama ведет диалог, вызывает backend-tools и при необходимости эскалирует тяжелую разработку в локально установленный и уже авторизованный `gemini`.
+<div align="center">
 
-Важно: проект не обходит авторизацию и не извлекает чужие токены или веб-сессии. `GeminiCLIAdapter` только автоматизирует CLI-команду, которую пользователь сам установил и авторизовал в своей среде.
+[![Python 3.9+](https://img.shields.io/badge/python-3.9+-3670A0?style=flat-square&logo=python&logoColor=ffdd54)](https://www.python.org)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green?style=flat-square)](LICENSE)
+[![Ollama](https://img.shields.io/badge/ollama-local_LLM-000000?style=flat-square&logo=ollama&logoColor=white)](https://ollama.com)
+[![Gemini CLI](https://img.shields.io/badge/gemini-CLI_escalation-4285F4?style=flat-square&logo=google&logoColor=white)]()
+[![Telegram](https://img.shields.io/badge/telegram-bot_gateway-2CA5E0?style=flat-square&logo=telegram&logoColor=white)]()
 
-## Компоненты
+**🇷🇺 [Русский](#-описание) · 🇬🇧 [English](#-overview)**
 
-- `TelegramGateway` - единая точка входа для группового чата.
-- `SecretaryAgentLoop` - новый agent loop: секретарь отвечает, вызывает tools, получает результаты и продолжает диалог.
-- `ToolRuntime` - backend-tools для файлов, grep, git, safe shell, фоновых процессов, URL fetch, web search, local coder и Gemini escalation.
-- `TaskSession` - fallback-режим активной задачи в Telegram: обсуждение, выбор backend, подтверждение модели и запуска.
-- `Router` - быстрый выбор роли по триггерам `@dev`, `@qa`, `@sec` и простым эвристикам.
-- `AgentOrchestrator` - собирает контекст, запускает локальные Ollama-роли или Gemini CLI и выгружает Ollama-модель перед тяжелым CLI-процессом.
-- `BaseCLIAdapter` / `GeminiCLIAdapter` - изолированный слой для запуска `gemini --prompt ... --output-format json`.
-- `OllamaClient` - локальная генерация и принудительная выгрузка модели через `keep_alive=0`.
-- `WorkspaceTools` / `WorkspaceToolRunner` - безопасное чтение файлов и запуск команд внутри заданного workspace.
-- `setup` - интерактивный установщик зависимостей, моделей и Gemini CLI auth.
-- `doctor` - проверка готовности окружения перед запуском.
+</div>
 
-## Кастомные промпты
+---
 
-Роли читают системные промпты из файлов:
+## 🇬🇧 Overview
 
-- `prompts/secretary.md` - локальный секретарь/менеджер на Ollama.
-- `prompts/developer.md` - сильный разработчик для Gemini CLI или локального coder backend.
-- `prompts/qa.md` - контролер/ревьюер.
+**AI-Office Kernel** is an MVP framework for a "Virtual AI Office": a single Telegram bot acts as the gateway, a local secretary agent on Ollama handles conversations, invokes backend tools, and escalates heavy development tasks to locally-installed Gemini CLI.
 
-Путь задается через:
+> The project does not bypass auth or extract tokens. `GeminiCLIAdapter` only automates the CLI command that the user has already installed and authorized.
+
+### How It Works
+
+```
+You send a message
+        ↓
+Local secretary understands the task
+        ↓
+Invokes backend-tools if needed
+        ↓
+Safe/medium tools execute automatically
+        ↓
+Gemini CLI escalation waits for confirmation
+        ↓
+Secretary returns a human-readable answer
+```
+
+### Components
+
+| Component | Role |
+|:---|:---|
+| `TelegramGateway` | Single entry point for group/private chats |
+| `SecretaryAgentLoop` | Agentic loop: answer → call tools → get results → continue |
+| `ToolRuntime` | Backend tools: files, grep, git, shell, URL fetch, web search, local coder, Gemini |
+| `Router` | Fast role selection via `@dev`, `@qa`, `@sec` triggers |
+| `AgentOrchestrator` | Context assembly, Ollama/Gemini routing, model lifecycle |
+| `GeminiCLIAdapter` | Isolated layer for `gemini --prompt ... --output-format json` |
+| `OllamaClient` | Local generation + forced unload via `keep_alive=0` |
+
+### Quick Start
 
 ```bash
-AI_OFFICE_PROMPT_DIR=/home/nekach/projects/ai-office-kernel/prompts
-```
-
-Если файла нет, используется встроенный дефолт из `roles.py`.
-
-## Агентный секретарь
-
-Основной режим теперь такой:
-
-```text
-Ты пишешь обычное сообщение
-↓
-локальный секретарь понимает задачу
-↓
-если надо, вызывает backend-tools
-↓
-safe/medium tools выполняются автоматически внутри workspace
-↓
-Gemini CLI escalation и опасные действия ждут подтверждения
-↓
-секретарь возвращает нормальный человеческий ответ
-```
-
-Это решает проблему, когда секретарь раньше говорил "сервер запущен", хотя ничего не запускал. Теперь он должен либо получить реальный tool-result, либо честно попросить подтверждение/данные.
-
-CLI-проверка без Telegram:
-
-```bash
-ai-office-kernel agent "Проверь, какие файлы есть в текущем workspace"
-```
-
-Минимальный HTTP API:
-
-```bash
-ai-office-kernel api --host 127.0.0.1 --port 8787
-curl -s http://127.0.0.1:8787/chat \
-  -H 'Content-Type: application/json' \
-  -d '{"chat_id":1,"text":"Проверь README и кратко скажи, что это за проект"}'
-```
-
-Подтверждение опасного действия через API:
-
-```bash
-curl -s http://127.0.0.1:8787/confirm \
-  -H 'Content-Type: application/json' \
-  -d '{"chat_id":1}'
-```
-
-## Локальные агенты
-
-Локальная часть реализована через Ollama:
-
-- обычный Telegram-текст идет в agentic secretary на `AI_OFFICE_ROUTER_MODEL`.
-- `@sec` / `/sec` остаются fallback-прямым вызовом секретаря.
-- `@dev` может идти в Gemini CLI или локальную coder-модель через `AI_OFFICE_DEVELOPER_BACKEND=gemini|local`.
-- `@qa` может идти в Gemini CLI или локальную QA-модель через `AI_OFFICE_QA_BACKEND=gemini|local`.
-
-Рекомендуемый старт под агентного секретаря:
-
-```bash
-AI_OFFICE_ROUTER_MODEL=qwen3:8b
-AI_OFFICE_LOCAL_QA_MODEL=qwen3:8b
-```
-
-Fallback, если `qwen3:8b` не установлен:
-
-```bash
-AI_OFFICE_ROUTER_MODEL=llama3.1:8b-instruct-q4_K_M
-```
-
-Минимальный локальный coder-режим:
-
-```bash
-AI_OFFICE_DEVELOPER_BACKEND=local
-AI_OFFICE_LOCAL_CODER_MODEL=qwen2.5-coder:7b-instruct-q4_K_M
-```
-
-Долгие Gemini CLI задачи рассчитаны на ожидание до 20 минут по умолчанию:
-
-```bash
-AI_OFFICE_CLI_TIMEOUT_SECONDS=1200
-AI_OFFICE_PROGRESS_FIRST_SECONDS=45
-AI_OFFICE_PROGRESS_INTERVAL_SECONDS=60
-```
-
-Во время выполнения `/status` показывает heartbeat: сколько идет задача, backend и модель. Это не скрытые рассуждения модели, а контроль живости процесса.
-
-Ручные local tools в Telegram остаются как debug/fallback:
-
-```text
-/tools
-/workspace
-/ls
-/read <file>
-/scan [path]
-/cmd --cwd <dir> npm install
-/confirm_tool
-/bg --cwd <dir> npm run dev -- --host 0.0.0.0
-/confirm_tool
-/procs
-/stop <id>
-```
-
-Ручной `/cmd` требует `/confirm_tool`. Агентный секретарь может сам вызывать safe/medium tools внутри `AI_OFFICE_WORKSPACE_ROOT`; Gemini CLI escalation и опасные shell-действия требуют `/confirm_agent` или обычного ответа `да`.
-
-## Gemini CLI как сервисный backend
-
-Адаптер использует официальный headless-режим Gemini CLI:
-
-```bash
-gemini --prompt "..." --output-format json --approval-mode auto_edit --skip-trust
-```
-
-Поддерживаемые настройки:
-
-- `AI_OFFICE_GEMINI_OUTPUT_FORMAT=json|stream-json|text`
-- `AI_OFFICE_GEMINI_APPROVAL_MODE=default|auto_edit|yolo|plan`
-- `AI_OFFICE_GEMINI_MODEL=auto|gemini-*`
-- `AI_OFFICE_GEMINI_RESUME=latest` или конкретный session id
-- `AI_OFFICE_GEMINI_INCLUDE_DIRECTORIES=src,tests`
-- `AI_OFFICE_GEMINI_ALL_FILES=true`
-- `AI_OFFICE_GEMINI_SANDBOX=true`
-
-`json` возвращает итоговый `response`, `session_id` и `stats`. `stream-json` возвращает JSONL-события `init`, `message`, `tool_use`, `tool_result`, `error`, `result`; адаптер собирает из них текст, события инструментов и usage.
-
-Смотри подробности: [docs/gemini-cli-integration.md](docs/gemini-cli-integration.md).
-Полный runbook запуска: [docs/runbook.md](docs/runbook.md).
-
-`setup` также пишет `.gemini/settings.json` в корень проекта и workspace-root: subagents и shell tool отключены для сервисных запусков, чтобы Gemini CLI не отдавал в Telegram ошибки вида `LocalAgentExecutor` и `run_shell_command`.
-
-## Быстрый старт
-
-```bash
-cd /home/nekach/projects/ai-office-kernel
-python3 -m venv .venv
-source .venv/bin/activate
+# Install
+python3 -m venv .venv && source .venv/bin/activate
 pip install -e .
 cp .env.example .env
-```
 
-Полностью автоматизированный bootstrap из чистой папки проекта:
-
-```bash
-cd /home/nekach/projects/ai-office-kernel
+# Or use the bootstrap script
 ./bootstrap.sh
-```
 
-Если нужно сразу запустить Gemini OAuth и получить ссылку в Telegram:
-
-```bash
-./bootstrap.sh \
-  --gemini-auth \
-  --telegram-bot-token "123:abc" \
-  --telegram-chat-id "123456789"
-```
-
-OAuth Google нельзя завершить без действия пользователя. По умолчанию setup только показывает ручную команду. Если передан `--gemini-auth`, скрипт запускает `gemini`, вытаскивает ссылку, отправляет ее в Telegram и ждет Enter после входа в браузере.
-
-Интерактивная настройка:
-
-```bash
+# Interactive setup (installs deps, Ollama models, Gemini CLI)
 ai-office-kernel setup
+
+# Health check
+ai-office-kernel doctor
+
+# Run Telegram gateway
+export TELEGRAM_BOT_TOKEN=...
+ai-office-kernel telegram
+
+# CLI test without Telegram
+ai-office-kernel agent "Check what files are in the current workspace"
+
+# HTTP API
+ai-office-kernel api --host 127.0.0.1 --port 8787
 ```
 
-Установщик умеет:
+### Default Models
 
-- ставить Python-зависимости через `pip install -e .`;
-- ставить Gemini CLI через `npm install -g @google/gemini-cli`;
-- проверять или ставить Ollama;
-- делать `ollama pull <model>`;
-- принимать прямую Hugging Face GGUF-ссылку, скачивать файл и создавать Ollama-модель через `ollama create`;
-- запускать Gemini CLI OAuth, печатать auth URL и отправлять его в Telegram-чат, если указан `TELEGRAM_BOT_TOKEN` и chat id;
-- писать готовый `.env`.
-
-Сейчас дефолтные модели:
-
-```text
+```yaml
 secretary/router: qwen3:8b
 local coder: qwen2.5-coder:7b-instruct-q4_K_M
 local QA: qwen3:8b
+fallback: llama3.1:8b-instruct-q4_K_M
 ```
 
-Та же настройка без установленного entrypoint:
+### Testing
 
 ```bash
-PYTHONPATH=src python3 -m ai_office_kernel setup --auto --skip-gemini-auth
-```
-
-Ручная авторизация Gemini CLI:
-
-```bash
-NO_BROWSER=1 gemini
-```
-
-После входа проверь:
-
-```bash
-cd /tmp
-gemini --prompt "Reply with exactly OK. Do not inspect files. Do not use tools." --output-format json --approval-mode default --skip-trust
-```
-
-Запуск Telegram-шлюза:
-
-```bash
-export TELEGRAM_BOT_TOKEN=...
-ai-office-kernel telegram
-```
-
-Основной Telegram workflow:
-
-```text
-Просто пишешь обычное сообщение.
-Секретарь уточняет, проверяет файлы/tools, собирает ТЗ и сам решает маршрут.
-Если он хочет вызвать Gemini CLI или опасное действие, бот попросит подтверждение.
-```
-
-Fallback workflow с ручной активной задачей:
-
-```text
-/task Сделай парсер nginx-логов на Python
-Любое сообщение с уточнениями задачи
-/gemini
-/model auto
-/confirm_model
-/run
-/confirm
-```
-
-Для локального выполнения вместо `/gemini` используй `/local`. Если активной задачи нет, обычный текст идет агентному локальному секретарю.
-
-Локальная проверка маршрутизации без запуска агентов:
-
-```bash
-ai-office-kernel doctor
-ai-office-kernel route "@dev Напиши парсер логов на Python"
-```
-
-Разовый прогон через оркестратор:
-
-```bash
-ai-office-kernel ask "@dev Напиши парсер логов на Python"
-```
-
-## Telegram privacy mode
-
-Если privacy mode у бота включен, Telegram обычно доставляет боту команды вида `/dev`, `/qa`, `/sec`, но не каждое обычное сообщение группы. Поэтому gateway поддерживает оба формата:
-
-- `/dev Напиши парсер логов`
-- `/qa Проверь этот фрагмент`
-- `/sec Что дальше по плану?`
-- `/task Сделай задачу`
-- `@dev ...`, `@qa ...`, `@sec ...` при отключенном privacy mode или в личном чате
-
-## Тесты
-
-Тесты ядра не требуют Telegram, Ollama или Gemini CLI:
-
-```bash
+# Core tests (no Telegram/Ollama/Gemini required)
 python3 -m unittest discover -s tests
 ```
+
+### Tech Stack
+
+![Python](https://img.shields.io/badge/python-3670A0?style=for-the-badge&logo=python&logoColor=ffdd54)
+![Ollama](https://img.shields.io/badge/ollama-000000?style=for-the-badge&logo=ollama&logoColor=white)
+![Telegram](https://img.shields.io/badge/telegram-2CA5E0?style=for-the-badge&logo=telegram&logoColor=white)
+
+---
+
+## 🇷🇺 Описание
+
+**AI-Office Kernel** — MVP-каркас «Виртуального ИИ-Офиса»: один Telegram-бот принимает сообщения, локальный секретарь на Ollama ведёт диалог, вызывает backend-tools и эскалирует тяжёлую разработку в локально установленный Gemini CLI.
+
+### Как Это Работает
+
+```
+Обычное сообщение в чат
+        ↓
+Локальный секретарь понимает задачу
+        ↓
+Вызывает backend-tools при необходимости
+        ↓
+Safe/medium tools выполняются автоматически
+        ↓
+Gemini CLI escalation ждёт подтверждения
+        ↓
+Секретарь возвращает человеческий ответ
+```
+
+### Компоненты
+
+| Компонент | Роль |
+|:---|:---|
+| `TelegramGateway` | Единая точка входа для группового/личного чата |
+| `SecretaryAgentLoop` | Агентный цикл: ответ → вызов tools → результат → продолжение |
+| `ToolRuntime` | Файлы, grep, git, shell, URL fetch, web search, local coder, Gemini |
+| `Router` | Быстрый выбор роли: `@dev`, `@qa`, `@sec` |
+| `AgentOrchestrator` | Сборка контекста, маршрутизация Ollama/Gemini |
+| `GeminiCLIAdapter` | `gemini --prompt ... --output-format json` |
+| `OllamaClient` | Локальная генерация + выгрузка через `keep_alive=0` |
+
+### Быстрый Старт
+
+```bash
+# Установка
+python3 -m venv .venv && source .venv/bin/activate
+pip install -e .
+cp .env.example .env
+
+# Или автоматический bootstrap
+./bootstrap.sh
+
+# Интерактивная настройка
+ai-office-kernel setup
+
+# Проверка окружения
+ai-office-kernel doctor
+
+# Запуск Telegram
+export TELEGRAM_BOT_TOKEN=...
+ai-office-kernel telegram
+
+# CLI тест без Telegram
+ai-office-kernel agent "Проверь файлы в workspace"
+
+# HTTP API
+ai-office-kernel api --host 127.0.0.1 --port 8787
+```
+
+### Telegram Команды
+
+```
+/dev  — задача на разработку
+/qa   — ревью и проверка
+/sec  — секретарь
+/task — начать активную задачу
+/tools /workspace /ls /read /scan — debug-инструменты
+/status — heartbeat текущей задачи
+```
+
+### Тесты
+
+```bash
+# Тесты ядра (без Telegram/Ollama/Gemini)
+python3 -m unittest discover -s tests
+```
+
+### Документация
+
+- [Интеграция Gemini CLI](docs/gemini-cli-integration.md)
+- [Runbook запуска](docs/runbook.md)
+
+---
+
+<div align="center">
+
+### License
+
+MIT — see [LICENSE](LICENSE) for details.
+
+<img src="https://capsule-render.vercel.app/api?type=waving&color=0:1a1b27,50:9B59B6,100:1a1b27&height=80&section=footer" width="100%"/>
+
+</div>
